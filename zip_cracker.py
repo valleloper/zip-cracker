@@ -1,24 +1,20 @@
 import pyzipper
 import itertools
 import string
-from threading import Thread
+import concurrent.futures
 import time
 
 MIN_PASSWORD_LENGTH = 1
 MAX_PASSWORD_LENGTH = 8
-succes = False
-succes_pwd = None
+NUM_OF_WORKER = 8
 
 
-def crack(zip, pwd):
-    global succes, succes_pwd
+def crack(zip_file, password):
     try:
-        zip.extractall(pwd=str.encode(pwd))
-        succes = True
-        succes_pwd = pwd
-        print("Success: Password is " + succes_pwd)
+        zip_file.extractall(pwd=str.encode(password))
+        return password  # Return the successful password
     except:
-        pass
+        return None  # Return None for invalid passwords
 
 
 def crack_zip(path):
@@ -26,15 +22,15 @@ def crack_zip(path):
     zip_file = pyzipper.AESZipFile(path)
     characters = string.ascii_letters + string.digits + string.punctuation
 
-    for length in range(MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH + 1):
-        for password in map("".join, itertools.product(characters, repeat=length)):
-            if succes:
-                break
-            t = Thread(target=crack, args=(zip_file, password))
-            t.start()
-
-    end = time.time()
-    print("Time: " + str(end - start))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=NUM_OF_WORKER) as executor:
+        for length in range(MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH + 1):
+            for password in map("".join, itertools.product(characters, repeat=length)):
+                future = executor.submit(crack, zip_file, password)
+                if future.result():
+                    print("Success: Password is", future.result())
+                    end = time.time()
+                    print("Time:", end - start)
+                    return  # Exit the function once a password is found
 
 
 if __name__ == "__main__":
